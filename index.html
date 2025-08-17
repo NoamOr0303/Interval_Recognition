@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>משחק זיהוי מרווחים</title>
+  <style>
+    :root{
+      --bg: #0f172a;
+      --card: #111827cc;
+      --text: #e5e7eb;
+      --muted:#94a3b8;
+      --accent:#22c55e;
+      --error:#ef4444;
+      --primary:#60a5fa;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+    }
+    html,body{height:100%}
+    body{
+      margin:0;display:grid;place-items:center;min-height:100%;
+      background: radial-gradient(1200px 800px at 20% 10%, #1f2937 0%, var(--bg) 60%),
+                  radial-gradient(1000px 700px at 90% 90%, #111827 0%, var(--bg) 60%);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans";
+      color:var(--text);
+    }
+    .card{width:min(920px, 92vw); background:var(--card); border:1px solid #1f2937; border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden;}
+    header{padding:20px 24px; border-bottom:1px solid #1f2937; display:flex; align-items:center; justify-content:space-between; gap:16px}
+    header h1{margin:0; font-size:clamp(18px, 2.4vw, 26px)}
+    header .score{font-size:14px; color:var(--muted)}
+    .wrap{display:grid; grid-template-columns: 1.1fr .9fr; gap:18px; padding:22px}
+    @media (max-width:840px){.wrap{grid-template-columns:1fr}}
+    .panel{background:rgba(255,255,255,.03); border:1px solid #1f2937; border-radius:12px; padding:18px}
+    .title{margin:0 0 8px; font-size:18px}
+    .muted{color:var(--muted); font-size:14px}
+    .challenge{display:grid; gap:14px; align-content:start}
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .badge{font-variant-numeric:tabular-nums; background:#0b1220; border:1px solid #1f2937; padding:8px 12px; border-radius:12px}
+    .badge strong{color:#fff}
+    .buttons{display:flex; gap:10px; flex-wrap:wrap}
+    .btn{appearance:none; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb; padding:10px 14px; border-radius:12px; cursor:pointer; transition:transform .08s ease, border-color .2s}
+    .btn:hover{border-color:#334155}
+    .btn:active{transform:translateY(1px)}
+    .btn.primary{background:linear-gradient(180deg,#1d4ed8 0%, #1e40af 100%); border-color:#1d4ed8}
+    .btn.good{background:linear-gradient(180deg,#16a34a 0%, #15803d 100%); border-color:#16a34a}
+    .answer-area{display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center}
+    input[type="text"]{width:100%; padding:12px 14px; border-radius:12px; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb; font-size:16px}
+    .hint{font-size:13px; color:var(--muted); margin-top:6px}
+    .result{margin-top:10px; font-size:15px}
+    .result.good{color:var(--accent)} .result.bad{color:var(--error)}
+    .settings{display:grid; gap:12px}
+    .settings .row{justify-content:space-between}
+    select{background:#0b1220; border:1px solid #1f2937; color:#e5e7eb; padding:8px 10px; border-radius:10px}
+    .small{font-size:13px}
+    footer{padding:0 22px 18px; color:var(--muted); font-size:13px}
+    code{background:#0b1220; border:1px solid #1f2937; padding:.15em .35em; border-radius:6px}
+  </style>
+</head>
+<body>
+  <main class="card" role="main" aria-labelledby="appTitle">
+    <header>
+      <h1 id="appTitle">🎧 משחק זיהוי מרווחים (סקונדה/טרצה ↑↓)</h1>
+      <div class="score" id="score">ניקוד: 0 נכונות מתוך 0 • רצף 0</div>
+    </header>
+
+    <section class="wrap">
+      <section class="panel challenge" aria-labelledby="challengeTitle">
+        <h2 class="title" id="challengeTitle">שאלה נוכחית</h2>
+        <p class="muted">
+          מוצג <strong>תו התחלה</strong> ומרווח (סקונדה/טרצה קטנה/גדולה) <strong>בעליה</strong> או <strong>בירידה</strong>.
+          עליך לכתוב איזה <strong>תו יעד</strong> מתקבל. אין קלידים – רק שמות תווים בעברית, לדוגמה
+          <code>רה דיאז</code>, <code>סי במול</code>, <code>פה</code>.
+        </p>
+
+        <div class="row">
+          <div class="badge" aria-live="polite">תו התחלה: <strong id="startNote">–</strong></div>
+          <div class="badge">מרווח: <strong id="intervalText">–</strong></div>
+          <div class="badge">כיוון: <strong id="directionText">–</strong></div>
+        </div>
+
+        <div class="buttons">
+          <button class="btn primary" id="newQuestion">שאלה חדשה</button>
+          <button class="btn" id="playBoth">▶️ נגן מרווח</button>
+          <button class="btn" id="playStart">▶️ נגן התחלה</button>
+          <button class="btn" id="playTarget">▶️ נגן יעד</button>
+          <button class="btn" id="reveal">👁️ הצג תשובה</button>
+        </div>
+
+        <div class="answer-area" style="margin-top:8px">
+          <input id="answer" type="text" placeholder="הקלד/י את התו (למשל: רה דיאז, סי במול, פה)" autocomplete="off" inputmode="text" />
+          <button class="btn good" id="check">בדוק</button>
+        </div>
+        <div class="hint">אפשר לכתוב “דיאז/במול”, או להשתמש בסימנים #/♯ ו-b/♭. גם C/D וכו’ יתקבלו אם נוח לך.</div>
+        <div class="result" id="result" aria-live="polite"></div>
+      </section>
+
+      <aside class="panel settings" aria-labelledby="settingsTitle">
+        <h2 class="title" id="settingsTitle">הגדרות</h2>
+        <div class="row">
+          <span>איות תווי יעד</span>
+          <select id="spellingPref">
+            <option value="random">אקראי (מומלץ)</option>
+            <option value="sharp">דיאזים (דו דיאז, רה דיאז…)</option>
+            <option value="flat">במולים (רה במול, מי במול…)</option>
+          </select>
+        </div>
+        <div class="row">
+          <span>טווח אוקטבות לנגינה</span>
+          <select id="octaveRange">
+            <option value="4">מרכז (דו4–סי4)</option>
+            <option value="3">נמוך (דו3–סי3)</option>
+            <option value="5">גבוה (דו5–סי5)</option>
+          </select>
+        </div>
+        <div class="row small">
+          <span>מצב אודיו</span>
+          <span id="audioState">לא מאותחל</span>
+        </div>
+        <hr style="border-color:#1f2937; opacity:.5">
+        <p class="muted small">מרווחים פעילים: m2/M2, m3/M3 בעליה/בירידה. אפשר להרחיב בקלות בהמשך.</p>
+      </aside>
+    </section>
+    <footer>
+      טיפ: <code>Enter</code> לבדיקה, ו-<code>Ctrl/Cmd + Enter</code> לשאלה חדשה.
+    </footer>
+  </main>
+
+  <script>
+    // שמות תווים בעברית (עם דיאזים/במולים) לפי מחלקות צליל 0..11
+    const SHARP_NAMES = ["דו","דו דיאז","רה","רה דיאז","מי","פה","פה דיאז","סול","סול דיאז","לה","לה דיאז","סי"];
+    const FLAT_NAMES  = ["דו","רה במול","רה","מי במול","מי","פה","סול במול","סול","לה במול","לה","סי במול","סי"];
+
+    const INTERVALS = [
+      { he:"סקונדה קטנה", semitones:1, short:"m2" },
+      { he:"סקונדה גדולה", semitones:2, short:"M2" },
+      { he:"טרצה קטנה",   semitones:3, short:"m3" },
+      { he:"טרצה גדולה",   semitones:4, short:"M3" },
+    ];
+
+    const DIRECTIONS = [
+      { he:"בעליה", sign:+1, arrow:"↑" },
+      { he:"בירידה", sign:-1, arrow:"↓" },
+    ];
+
+    // המרה מטקסט לתו (pitch-class)
+    function noteNameToPC(raw){
+      if(!raw) return null;
+      let s = String(raw).trim();
+      if(!s) return null;
+      // נורמליזציה של סימנים -> מילים
+      s = s.replace(/[#♯]/g, " דיאז ").replace(/[b♭]/gi, " במול ").replace(/\s+/g, " ").trim();
+      const lower = s.toLowerCase();
+
+      const baseMap = new Map([
+        ["דו",0],["רה",2],["מי",4],["פה",5],["פא",5],["סול",7],["לה",9],["סי",11],["טי",11]
+      ]);
+
+      // עברית: "רה", "רה דיאז", "סי במול"
+      let mHeb = lower.match(/^(דו|רה|מי|פה|פא|סול|לה|סי|טי)(?:\s+(דיאז|במול))?$/);
+      if(mHeb){
+        const base = baseMap.get(mHeb[1]);
+        const acc = mHeb[2] || "";
+        const delta = acc === "דיאז" ? 1 : acc === "במול" ? -1 : 0;
+        return (base + delta + 120) % 12;
+      }
+
+      // לטינית (עדיין נתמך): C, F#, Bb
+      const sUp = lower.toUpperCase().replace(/\s+/g, "");
+      const mLat = sUp.match(/^([A-G])([#B])?$/);
+      if(mLat){
+        const letter = mLat[1];
+        const acc = mLat[2] || "";
+        const base = {C:0,D:2,E:4,F:5,G:7,A:9,B:11}[letter];
+        const delta = acc === "#" ? 1 : acc === "B" ? -1 : 0;
+        return (base + delta + 120) % 12;
+      }
+      return null;
+    }
+
+    function pcToName(pc, pref){
+      const idx = ((pc % 12) + 12) % 12;
+      if(pref === "sharp") return SHARP_NAMES[idx];
+      if(pref === "flat")  return FLAT_NAMES[idx];
+      const table = Math.random() < 0.5 ? SHARP_NAMES : FLAT_NAMES;
+      return table[idx];
+    }
+
+    function randomInt(min, max){ return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+    const els = {
+      startNote: document.getElementById('startNote'),
+      intervalText: document.getElementById('intervalText'),
+      directionText: document.getElementById('directionText'),
+      answer: document.getElementById('answer'),
+      check: document.getElementById('check'),
+      newQuestion: document.getElementById('newQuestion'),
+      reveal: document.getElementById('reveal'),
+      result: document.getElementById('result'),
+      score: document.getElementById('score'),
+      playBoth: document.getElementById('playBoth'),
+      playStart: document.getElementById('playStart'),
+      playTarget: document.getElementById('playTarget'),
+      spellingPref: document.getElementById('spellingPref'),
+      octaveRange: document.getElementById('octaveRange'),
+      audioState: document.getElementById('audioState'),
+    };
+
+    let current = null;
+    let stats = {correct:0, total:0, streak:0};
+
+    function updateScore(){
+      els.score.textContent = `ניקוד: ${stats.correct} נכונות מתוך ${stats.total} • רצף ${stats.streak}`;
+    }
+
+    function pickQuestion(){
+      const startPC = randomInt(0,11);
+      const interval = INTERVALS[randomInt(0, INTERVALS.length-1)];
+      const direction = DIRECTIONS[randomInt(0, DIRECTIONS.length-1)];
+      const answerPref = els.spellingPref.value;
+      const displayStartName = pcToName(startPC, 'random');
+      const targetPC = (startPC + direction.sign * interval.semitones + 120) % 12;
+
+      current = { startPC, interval, direction, targetPC, displayStartName, answerPref };
+
+      els.startNote.textContent = displayStartName;
+      els.intervalText.textContent = `${interval.he} (${interval.short})`;
+      els.directionText.textContent = `${direction.he} ${direction.arrow}`;
+      els.answer.value = "";
+      els.answer.focus();
+      els.result.textContent = "";
+      els.result.className = 'result';
+    }
+
+    function checkAnswer(){
+      if(!current) return;
+      const user = els.answer.value;
+      const pc = noteNameToPC(user);
+      if(pc === null){
+        els.result.textContent = 'תו לא חוקי. כתבו למשל: רה דיאז, סי במול, פה.';
+        els.result.className = 'result bad';
+        return;
+      }
+      stats.total++;
+      if(pc === current.targetPC){
+        stats.correct++; stats.streak++;
+        els.result.textContent = 'נכון! 🎉';
+        els.result.className = 'result good';
+      } else {
+        stats.streak = 0;
+        const preferred = pcToName(current.targetPC, current.answerPref);
+        const alt = preferred.includes('דיאז') ? FLAT_NAMES[current.targetPC] : SHARP_NAMES[current.targetPC];
+        els.result.innerHTML = `לא נכון. התשובה: <strong>${preferred}</strong>` + (alt !== preferred ? ` (גם <strong>${alt}</strong> ייחשב נכון).` : '.');
+        els.result.className = 'result bad';
+      }
+      updateScore();
+    }
+
+    function revealAnswer(){
+      if(!current) return;
+      const preferred = pcToName(current.targetPC, current.answerPref);
+      const alt = preferred.includes('דיאז') ? FLAT_NAMES[current.targetPC] : SHARP_NAMES[current.targetPC];
+      els.result.innerHTML = `תשובה: <strong>${preferred}</strong>` + (alt !== preferred ? ` (אנהרמונית: <strong>${alt}</strong>).` : '.');
+      els.result.className = 'result';
+    }
+
+    // אודיו
+    let audioCtx = null;
+    function ensureAudio(){
+      if(!audioCtx){
+        try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+             els.audioState.textContent = 'פעיל';
+        }catch(e){ els.audioState.textContent = 'לא זמין בדפדפן'; }
+      }
+      return !!audioCtx;
+    }
+
+    function pcToMidi(pc, baseOct=4){ const midiBase = 12 * (baseOct + 1); return midiBase + pc; }
+    function midiToFreq(midi){ return 440 * Math.pow(2, (midi - 69)/12); }
+    function playBeep(pc, duration=0.6, when=0){
+      if(!ensureAudio()) return;
+      const oct = parseInt(els.octaveRange.value,10) || 4;
+      const midi = pcToMidi(pc, oct);
+      const freq = midiToFreq(midi);
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.value = 0.0001;
+      osc.connect(gain).connect(audioCtx.destination);
+      const t0 = audioCtx.currentTime + when;
+      const t1 = t0 + 0.02;
+      const tEnd = t0 + duration;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.18, t1);
+      gain.gain.exponentialRampToValueAtTime(0.0001, tEnd);
+      osc.start(t0); osc.stop(tEnd + 0.01);
+    }
+
+    function playStart(){ if(current) playBeep(current.startPC, 0.7, 0); }
+    function playTarget(){ if(current) playBeep(current.targetPC, 0.7, 0); }
+    function playBoth(){ if(current){ playBeep(current.startPC, 0.7, 0); playBeep(current.targetPC, 0.7, 0.8); } }
+
+    // אירועים
+    document.getElementById('newQuestion').addEventListener('click', pickQuestion);
+    document.getElementById('check').addEventListener('click', checkAnswer);
+    document.getElementById('reveal').addEventListener('click', revealAnswer);
+    document.getElementById('playStart').addEventListener('click', playStart);
+    document.getElementById('playTarget').addEventListener('click', playTarget);
+    document.getElementById('playBoth').addEventListener('click', playBoth);
+
+    document.addEventListener('keydown', (ev)=>{
+      if(ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); pickQuestion(); }
+      else if(ev.key === 'Enter'){ ev.preventDefault(); checkAnswer(); }
+    });
+
+    pickQuestion();
+    updateScore();
+  </script>
+</body>
+</html>
